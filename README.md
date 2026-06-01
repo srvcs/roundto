@@ -1,55 +1,67 @@
 # srvcs-roundto
 
-The round-to-N-decimal-places primitive of the srvcs.cloud distributed standard
-library.
+## Name
 
-Its single concern: **round a number to `N` decimal places**. It does not
-validate input itself — it delegates "is this a number" to
-[`srvcs-isnumber`](https://github.com/srvcs/isnumber) over HTTP, the single
-source of truth for that question, then performs the rounding locally in `f64`.
+| Field | Value |
+| --- | --- |
+| Service | `srvcs-roundto` |
+| Slug | `roundto` |
+| Repository | `srvcs/roundto` |
+| Package | `srvcs-roundto` |
+| Kind | `primitive` |
 
-Floats are valid input and the result may be fractional. The result is computed
-as `(value * 10^decimals).round() / 10^decimals`, so `roundto(3.14159, 2) ==
-3.14` and `roundto(2.71828, 3) == 2.718`.
+## Function
 
-If `srvcs-isnumber` is unreachable, `srvcs-roundto` reports itself **degraded
-(503)** rather than guessing.
+rounding: round to N decimal places
+
+## Dependencies
+
+| Dependency | Repository |
+| --- | --- |
+| `srvcs-isnumber` | [srvcs/isnumber](https://github.com/srvcs/isnumber) |
 
 ## API
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/` | Service identity, concern, and dependency list |
-| `POST` | `/` | Compute `roundto(value, decimals)` |
-| `GET` | `/healthz` `/readyz` `/metrics` `/openapi.json` | srvcs service standard surface |
+| `GET` | `/` | Service identity |
+| `POST` | `/` | Evaluate the service function |
+| `GET` | `/healthz` | Liveness probe |
+| `GET` | `/readyz` | Readiness probe |
+| `GET` | `/metrics` | Prometheus metrics |
+| `GET` | `/openapi.json` | OpenAPI document |
 
-```sh
-curl -s -X POST localhost:8080/ -H 'content-type: application/json' \
-  -d '{"value": 3.14159, "decimals": 2}'
-# {"value":3.14159,"decimals":2,"result":3.14}
-```
+## Inputs
 
-Responses:
+| Name | Type | Required |
+| --- | --- | --- |
+| `value` | `json` | yes |
+| `decimals` | `json` | yes |
 
-- `200 {"value": n, "decimals": d, "result": <float>}` — evaluated.
-- `422` — the value is not a number (per `srvcs-isnumber`), or `decimals` is not
-  a non-negative integer.
-- `503` — a dependency is unavailable.
+## Outputs
 
-## Dependencies
-
-- [`srvcs-isnumber`](https://github.com/srvcs/isnumber) — input validation.
+| Name | Type |
+| --- | --- |
+| `value` | `json` |
+| `decimals` | `json` |
+| `result` | `number` |
 
 ## Configuration
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `SRVCS_BIND_ADDR` | `0.0.0.0:8080` | Bind address |
-| `SRVCS_ISNUMBER_URL` | `http://127.0.0.1:8081` | Base URL of `srvcs-isnumber` |
 | `SRVCS_ENV` | `development` | Environment label for logs |
 | `RUST_LOG` | `info,tower_http=info` | Tracing filter |
+| `SRVCS_ISNUMBER_URL` | `http://127.0.0.1:8081` | Base URL for srvcs-isnumber |
 
-## Local checks
+## Error Behavior
+
+- `422` means the request could not be evaluated for the documented input shape.
+- `503` means a required dependency was unavailable or returned an unexpected response.
+- Dependency validation errors are forwarded when this service delegates validation.
+
+## Local Checks
 
 ```sh
 cargo fmt --check
@@ -57,11 +69,8 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-Orchestration tests stand up a mock `srvcs-isnumber` in-process (one that
-genuinely computes "is this a number" from the request body), so the suite runs
-without the rest of the fleet. Float results are compared approximately
-(`|got - expected| < 1e-9`). See
-[`srvcs/platform`](https://github.com/srvcs/platform) for the shared standard.
+See the [srvcs service standard](https://github.com/srvcs/platform/blob/main/STANDARD.md) for the full operational contract.
 
-> Note: the `cargoHash` in `flake.nix` is inherited from the template and must be
-> refreshed with a `nix build` before the Nix gates pass.
+## Metadata
+
+Machine-readable service metadata lives in `srvcs.yaml`. Keep it aligned with this README when the service contract changes.
